@@ -5,14 +5,24 @@
       2. npx webpack-dev-server 只会在内存中编译打包，没有输出
 */
 
+/*
+  HMR: hot module replacement 热模块替换 / 模块热替换。
+  作用：一个模块发生变化，只重新打包这一个模块，而不是打包所有（模块），极大提高构建速度。
+*/
+
 
 const path = require('path')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const OptimizeCssAssetsWebpackPlugin = require('optimize-css-assets-webpack-plugin')
 
-// 设置nodejs环境变量
+// 设置nodejs环境变量，决定使用browserslist的哪个环境
 // process.env.NODE_ENV = development
+
+/* 
+  正常来讲，一个文件只能被一个loader处理，当一个文件要被多个load而处理时，一定要指定loader执行的先后顺序：先执行eslint，再执行babel
+*/
+
 
 module.exports = {
   entry: './src/index.js',
@@ -22,14 +32,35 @@ module.exports = {
   },
   module: {
     rules: [
-      // loader配置
+      // loader配置：
+
+      // js语法检查: eslint
+      {
+        /*
+          语法检查：eslint-loader  eslint
+          注意：只检查自己写的代码，第三方的库是不检查的。
+          设置检查规则：在package.json中eslintConfig中设置: "eslintConfig": 
+            {"extends": "airbnb-base"}
+          推荐airbnb风格：
+          1. eslint-config-airbnb-base
+          2. eslint-plugin-import
+          3. eslint
+        */
+        test: /\.js$/,
+        exclude: /node_modules/,
+        loader: 'eslint-loader',
+        enforce: 'pre', // 优先执行
+        // 自动修复
+        option: { fix: true }
+      },
+
       /*
         js兼容性处理：babel-loader @babel/core @babel/preset-env
         1. 基本js兼容性处理 --> @babel/preset-env
-        问题：只能转换基本语法，如Promise等
+        问题：只能转换基本语法，如Promise等；
         2. 全部js兼容性处理 --> @babel/polyfill: import '@babel/polyfill'
-        问题：引入全部兼容性代码，体积太大
-        3. 需要做兼容性处理：按需加载 --> core-js
+        问题：引入全部兼容性代码，体积太大；
+        3. 需要做兼容性处理：按需加载 --> core-js；
       */
       {
         test: /\.js$/,
@@ -58,26 +89,11 @@ module.exports = {
           ]
         }
       },
+
+      // js压缩：将mode调成production模式，文件将自动压缩
+
+      // 处理css
       {
-        /*
-          语法检查：eslint-loader  eslint
-          注意：只检查自己写的代码，第三方的库是不检查的。
-          设置检查规则：在package.json中eslintConfig中设置: "eslintConfig": 
-            {"extends": "airbnb-base"}
-          推荐airbnb风格：
-          1. eslint-config-airbnb-base
-          2. eslint-plugin-import
-          3. eslint
-        */
-        test: /\.js$/,
-        exclude: /node_modules/,
-        loader: 'eslint-loader',
-        option: {
-          fix: true
-        }
-      },
-      {
-        // 处理css
         test: /\.css$/i,
         use: [
           // 'style-loader',
@@ -116,19 +132,32 @@ module.exports = {
 
         ]
       },
+
+      // 处理less
       {
-        // 处理less
         test: /\.less$/i,
         use: [
-          // 创建style标签，将样式放入
-          'style-loader',
+          // 创建style标签，将样式放入'style-loader',
+          // 取代style-loader。作用：提取js中的css成单独文件
+          MiniCssExtractPlugin.loader,
           // 将css文件整合到js文件中
           'css-loader',
+          {
+            loader: 'postcss-loader',
+            options: {
+              ident: 'postcss',
+              plugins: () => [
+                // postcss插件
+                require('postcss-preset-env')()
+              ]
+            }
+          },
           'less-loader'
         ]
       },
+
+      // 处理样式图片资源
       {
-        // 处理样式图片资源
         test: /\.(png|jpg|gif)$/i,
         loader: 'url-loader',
         options: {
@@ -138,20 +167,22 @@ module.exports = {
           outputPath: 'imgs'
         }
       },
+
+      // 处理html中的img资源
       {
-        // 处理html中的img资源
         test: /\.html$/,
         loader: 'html-loader'
       },
-      // {
+
       // 处理其他资源
-      //   exclude: /\.(css|js|html|json|less|jpg|png|gif)$/,
-      //   loader: 'file-loader',
-      //   options: {
-      //     name: '[hash10].[ext]',
-      //     outputPath: 'medias'
-      //   }
-      // }
+      {
+        exclude: /\.(css|js|html|json|less|jpg|png|gif)$/,
+        loader: 'file-loader',
+        options: {
+          name: '[hash10].[ext]',
+          outputPath: 'medias'
+        }
+      }
     ]
   },
   plugins: [
@@ -166,22 +197,26 @@ module.exports = {
         removeComments: true
       }
     }),
+
     // 提取css文件成单独文件
     new MiniCssExtractPlugin({
       filename: 'css/built.css'
     }),
+
     // 压缩css
     new OptimizeCssAssetsWebpackPlugin()
   ],
+
   // 模式
   mode: 'development',
   // production mode自动压缩js代码
   // mode: 'production'
+
   devServer: {
     contentBase: path.resolve(__dirname, 'build'),
     compress: true,
     port: 3000,
     open: true,
-    hot: true
+    hot: true // 开启HMR功能。当修改了webpack配置，新配置想要生效，必须重启webpack。
   }
 }
